@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Streaming UI is the new async UI</title>
+<meta name="description" content="After 7 years of front-end engineering, here's the honest breakdown of streaming UI, why it matters, and the mistakes we keep making." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0c0c0e;
+    --bg2: #131316;
+    --bg3: #1a1a1f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8e8ec;
+    --text2: #8a8a9a;
+    --text3: #55555f;
+    --accent: #7b6ef6;
+    --accent2: #a89cf7;
+    --accent-dim: rgba(123,110,246,0.12);
+    --accent-glow: rgba(123,110,246,0.25);
+    --green: #4ade80;
+    --amber: #fbbf24;
+    --coral: #f87171;
+    --teal: #2dd4bf;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Geist', system-ui, sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NOISE TEXTURE ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(12,12,14,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: var(--serif);
+    font-size: 18px;
+    color: var(--text);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+  }
+
+  .logo span { color: var(--accent2); font-style: italic; }
+
+  nav { display: flex; gap: 28px; }
+  nav a {
+    font-size: 13px;
+    color: var(--text2);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: color 0.2s;
+  }
+  nav a:hover { color: var(--text); }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    padding: 100px 40px 80px;
+    max-width: 780px;
+    margin: 0 auto;
+    z-index: 1;
+  }
+
+  .hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border-radius: 99px;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    text-transform: uppercase;
+  }
+
+  .tag.accent {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+
+  .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text3); }
+
+  .hero-date {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text3);
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(36px, 5vw, 54px);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 24px;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent2);
+  }
+
+  .hero-sub {
+    font-size: 18px;
+    color: var(--text2);
+    line-height: 1.65;
+    max-width: 600px;
+    margin-bottom: 40px;
+  }
+
+  .author-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+  }
+
+  .avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent2);
+    font-family: var(--sans);
+    flex-shrink: 0;
+  }
+
+  .author-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .author-role { font-size: 12px; color: var(--text2); margin-top: 1px; }
+
+  /* ── DIVIDER ── */
+  .divider {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 40px;
+    position: relative;
+    z-index: 1;
+  }
+  .divider hr {
+    border: none;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── MAIN CONTENT ── */
+  .content {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 60px 40px 120px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── SECTION HEADERS ── */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    margin-top: 64px;
+  }
+
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    min-width: 28px;
+  }
+
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    line-height: 1.25;
+    margin-bottom: 20px;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 10px;
+    margin-top: 32px;
+    letter-spacing: 0.01em;
+  }
+
+  p { margin-bottom: 20px; color: var(--text2); line-height: 1.8; }
+  p strong { color: var(--text); font-weight: 500; }
+
+  /* ── STATE MACHINE VISUAL ── */
+  .state-machine {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin: 32px 0;
+    overflow-x: auto;
+  }
+
+  .state-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .states-async {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+
+  .state-pill {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    background: var(--bg3);
+    white-space: nowrap;
+  }
+
+  .state-pill.active { border-color: var(--accent); color: var(--accent2); background: var(--accent-dim); }
+  .state-pill.success { border-color: #4ade8066; color: var(--green); background: rgba(74,222,128,0.08); }
+  .state-pill.error { border-color: #f8717166; color: var(--coral); background: rgba(248,113,113,0.08); }
+  .state-pill.warn { border-color: #fbbf2466; color: var(--amber); background: rgba(251,191,36,0.08); }
+
+  .arrow {
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .states-stream {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  /* ── CODE BLOCKS ── */
+  .code-block {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 24px 0;
+    overflow: hidden;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+
+  .code-lang {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .code-dots { display: flex; gap: 6px; }
+  .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .code-dot:nth-child(1) { background: #f87171; opacity: 0.6; }
+  .code-dot:nth-child(2) { background: #fbbf24; opacity: 0.6; }
+  .code-dot:nth-child(3) { background: #4ade80; opacity: 0.6; }
+
+  pre {
+    padding: 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text2);
+  }
+
+  .cm { color: var(--text3); font-style: italic; }
+  .kw { color: var(--accent2); }
+  .fn { color: var(--teal); }
+  .str { color: var(--green); }
+  .num { color: var(--amber); }
+  .var { color: var(--text); }
+
+  /* ── GOTCHA CARDS ── */
+  .gotchas { display: flex; flex-direction: column; gap: 16px; margin: 32px 0; }
+
+  .gotcha-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    background: var(--bg2);
+    transition: border-color 0.2s;
+  }
+
+  .gotcha-card:hover { border-color: var(--border2); }
+
+  .gotcha-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+
+  .gotcha-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .gotcha-body { font-size: 14px; color: var(--text2); line-height: 1.7; margin: 0; }
+
+  /* ── ENTERPRISE GRID ── */
+  .enterprise-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 32px 0;
+  }
+
+  .enterprise-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    background: var(--bg2);
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .enterprise-card:hover { border-color: var(--border2); background: var(--bg3); }
+
+  .enterprise-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .enterprise-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    letter-spacing: 0.05em;
+  }
+
+  .badge-purple { background: var(--accent-dim); color: var(--accent2); border: 1px solid var(--accent); }
+  .badge-green { background: rgba(74,222,128,0.08); color: var(--green); border: 1px solid #4ade8044; }
+  .badge-teal { background: rgba(45,212,191,0.08); color: var(--teal); border: 1px solid #2dd4bf44; }
+  .badge-amber { background: rgba(251,191,36,0.08); color: var(--amber); border: 1px solid #fbbf2444; }
+
+  .enterprise-desc { font-size: 13px; color: var(--text2); line-height: 1.65; margin: 0; }
+
+  /* ── TRADEOFFS TABLE ── */
+  .tradeoffs { margin: 32px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+  .tradeoff-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tradeoff-row:last-child { border-bottom: none; }
+  .tradeoff-row.header { background: var(--bg3); }
+
+  .tradeoff-cell {
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.5;
+    border-right: 1px solid var(--border);
+  }
+
+  .tradeoff-cell:last-child { border-right: none; }
+
+  .tradeoff-row.header .tradeoff-cell {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 400;
+  }
+
+  .tradeoff-cell.decision { color: var(--text); font-weight: 500; }
+  .tradeoff-cell.pro { color: var(--green); }
+  .tradeoff-cell.con { color: var(--coral); }
+
+  /* ── CALLOUT ── */
+  .callout {
+    border-left: 3px solid var(--accent);
+    padding: 20px 24px;
+    background: var(--accent-dim);
+    border-radius: 0 10px 10px 0;
+    margin: 32px 0;
+  }
+
+  .callout p {
+    font-family: var(--serif);
+    font-size: 19px;
+    font-style: italic;
+    color: var(--text);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* ── CLOSING ── */
+  .closing {
+    margin-top: 72px;
+    padding-top: 40px;
+    border-top: 1px solid var(--border);
+  }
+
+  .closing-title {
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--text);
+    margin-bottom: 12px;
+    font-style: italic;
+  }
+
+  .closing p { color: var(--text2); margin-bottom: 28px; }
+
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+  }
+
+  .btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+  .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent2); }
+  .btn.primary:hover { background: rgba(123,110,246,0.2); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .footer-left { font-size: 13px; color: var(--text3); }
+  .footer-left strong { color: var(--text2); font-weight: 400; }
+
+  .footer-links { display: flex; gap: 20px; }
+  .footer-links a { font-size: 13px; color: var(--text3); text-decoration: none; transition: color 0.2s; }
+  .footer-links a:hover { color: var(--text); }
+
+  /* ── SCROLL PROGRESS ── */
+  .progress {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    height: 2px;
+    background: var(--accent);
+    z-index: 200;
+    transition: width 0.1s linear;
+    width: 0%;
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    header { padding: 0 20px; }
+    nav { display: none; }
+    .hero { padding: 60px 20px 40px; }
+    .content { padding: 40px 20px 80px; }
+    .divider { padding: 0 20px; }
+    footer { padding: 24px 20px; }
+    .tradeoff-row { grid-template-columns: 1fr; }
+    .tradeoff-cell { border-right: none; border-bottom: 1px solid var(--border); }
+    .tradeoff-cell:last-child { border-bottom: none; }
+    h1 { font-size: 32px; }
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero > * { animation: fadeUp 0.5s ease both; }
+  .hero > *:nth-child(1) { animation-delay: 0.05s; }
+  .hero > *:nth-child(2) { animation-delay: 0.12s; }
+  .hero > *:nth-child(3) { animation-delay: 0.2s; }
+  .hero > *:nth-child(4) { animation-delay: 0.28s; }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<!-- HEADER -->
+<header>
+  <a href="#" class="logo">C<span>harishma</span></a>
+  <nav>
+    <a href="#async">Async vs Streaming</a>
+    <a href="#gotchas">Gotchas</a>
+    <a href="#enterprise">Enterprise</a>
+    <a href="#tradeoffs">Tradeoffs</a>
+  </nav>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-meta">
+    <span class="tag accent">Front-End Engineering</span>
+    <span class="tag">AI Engineering</span>
+    <div class="dot"></div>
+    <span class="hero-date">2025</span>
+  </div>
+
+  <h1>Streaming UI is the <em>new async UI</em> — and we're repeating the same design mistakes</h1>
+
+  <p class="hero-sub">After 7 years in front-end engineering, I've watched this inflection point arrive before. Here's the honest breakdown of what's changing, what we keep getting wrong, and what the best teams are doing differently.</p>
+
+  <div class="author-row">
+    <div class="avatar">CE</div>
+    <div>
+      <div class="author-name">Charishma</div>
+      <div class="author-role">Senior Front-End Engineer · Learning AI Engineering</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"><hr /></div>
+
+<!-- CONTENT -->
+<article class="content">
+
+  <!-- SECTION 1: ASYNC -->
+  <div id="async">
+    <div class="section-label">
+      <span class="section-num">01</span>
+      <div class="section-line"></div>
+    </div>
+    <h2>What async UI taught us</h2>
+    <p>When Promises and <code>async/await</code> went mainstream, the entire mental model of building UI had to shift. We moved from synchronous "request → wait → render" to managing a new class of problems: loading states, error boundaries, race conditions, stale data, partial failures.</p>
+    <p>That transition took the industry years to get right. We built skeleton loaders, React Suspense, React Query, optimistic updates — all around one core assumption:</p>
+
+    <div class="callout">
+      <p>The response arrives whole, or not at all.</p>
+    </div>
+
+    <p>Async UI had four states. Clean. Predictable. A state machine you could draw in 30 seconds:</p>
+
+    <div class="state-machine">
+      <div class="state-label">Async state machine</div>
+      <div class="states-async">
+        <span class="state-pill">idle</span>
+        <span class="arrow">→</span>
+        <span class="state-pill active">loading</span>
+        <span class="arrow">→</span>
+        <span class="state-pill success">complete</span>
+        <span class="arrow">|</span>
+        <span class="state-pill error">error</span>
+      </div>
+      <div class="state-label" style="margin-bottom:16px;">Streaming state machine</div>
+      <div class="states-stream">
+        <span class="state-pill">idle</span>
+        <span class="state-pill active">stream-started</span>
+        <span class="state-pill active">stream-in-progress</span>
+        <span class="state-pill warn">stream-interrupted</span>
+        <span class="state-pill error">stream-errored-partial</span>
+        <span class="state-pill error">stream-errored-empty</span>
+        <span class="state-pill success">stream-complete</span>
+      </div>
+    </div>
+
+    <p>Every one of those streaming states needs a deliberate design decision. Most teams today only model three of them.</p>
+  </div>
+
+  <!-- SECTION 2: HOW -->
+  <div>
+    <div class="section-label">
+      <span class="section-num">02</span>
+      <div class="section-line"></div>
+    </div>
+    <h2>How streaming UI actually works</h2>
+    <p>At the protocol level, streaming runs via <strong>Server-Sent Events (SSE)</strong> — the server holds the HTTP connection open and pushes token deltas as they're generated. Each event looks like:</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">SSE stream</span>
+      </div>
+      <pre><span class="cm">// server pushes these continuously</span>
+<span class="var">data:</span> <span class="str">{"delta": {"text": "The"}}</span>
+<span class="var">data:</span> <span class="str">{"delta": {"text": " abstraction"}}</span>
+<span class="var">data:</span> <span class="str">{"delta": {"text": " layer"}}</span>
+<span class="var">data:</span> <span class="str">[DONE]</span></pre>
+    </div>
+
+    <p>On the client you consume this via the <code>ReadableStream</code> API on the <code>fetch</code> response body:</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">React — naive approach</span>
+      </div>
+      <pre><span class="kw">const</span> <span class="var">response</span> = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'/api/chat'</span>, { <span class="var">method</span>: <span class="str">'POST'</span> });
+<span class="kw">const</span> <span class="var">reader</span> = <span class="var">response</span>.<span class="var">body</span>.<span class="fn">getReader</span>();
+<span class="kw">const</span> <span class="var">decoder</span> = <span class="kw">new</span> <span class="fn">TextDecoder</span>();
+
+<span class="kw">while</span> (<span class="kw">true</span>) {
+  <span class="kw">const</span> { <span class="var">done</span>, <span class="var">value</span> } = <span class="kw">await</span> <span class="var">reader</span>.<span class="fn">read</span>();
+  <span class="kw">if</span> (<span class="var">done</span>) <span class="kw">break</span>;
+
+  <span class="kw">const</span> <span class="var">token</span> = <span class="fn">parseChunk</span>(<span class="var">decoder</span>.<span class="fn">decode</span>(<span class="var">value</span>));
+  <span class="cm">// setState 20-30x per second — this causes problems</span>
+  <span class="fn">setStreamedText</span>(<span class="var">prev</span> => <span class="var">prev</span> + <span class="var">token</span>);
+}</pre>
+    </div>
+
+    <p>The better pattern — accumulate in a <code>ref</code>, render via <code>requestAnimationFrame</code>:</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">React — production approach</span>
+      </div>
+      <pre><span class="kw">const</span> <span class="var">bufferRef</span> = <span class="fn">useRef</span>(<span class="str">''</span>);
+<span class="kw">const</span> [<span class="var">displayText</span>, <span class="fn">setDisplayText</span>] = <span class="fn">useState</span>(<span class="str">''</span>);
+
+<span class="cm">// accumulate synchronously — no React batching issues</span>
+<span class="var">bufferRef</span>.<span class="var">current</span> += <span class="var">token</span>;
+
+<span class="cm">// sync to state at a controlled frame rate</span>
+<span class="fn">requestAnimationFrame</span>(() => {
+  <span class="fn">setDisplayText</span>(<span class="var">bufferRef</span>.<span class="var">current</span>);
+});</pre>
+    </div>
+  </div>
+
+  <!-- SECTION 3: GOTCHAS -->
+  <div id="gotchas">
+    <div class="section-label">
+      <span class="section-num">03</span>
+      <div class="section-line"></div>
+    </div>
+    <h2>The gotchas that hit you in production</h2>
+    <p>These aren't tutorial problems. These are the things that show up after you ship.</p>
+
+    <div class="gotchas">
+      <div class="gotcha-card">
+        <div class="gotcha-num">GOTCHA 01</div>
+        <div class="gotcha-title">Markdown flickering</div>
+        <p class="gotcha-body">Tokens render mid-syntax. Users watch <code>**The best</code> snap to bold when the closing <code>**</code> arrives. Code blocks appear as raw text then suddenly reformat. The fix: buffer to semantic boundaries before rendering. Claude's UI does this — that's why it feels coherent mid-stream.</p>
+      </div>
+      <div class="gotcha-card">
+        <div class="gotcha-num">GOTCHA 02</div>
+        <div class="gotcha-title">Component unmounting mid-stream</div>
+        <p class="gotcha-body">User navigates away while a stream is in flight. You're calling setState on an unmounted component — silent memory leak in React 18. Always wire an <code>AbortController</code> to the effect cleanup function. Almost every first implementation forgets this.</p>
+      </div>
+      <div class="gotcha-card">
+        <div class="gotcha-num">GOTCHA 03</div>
+        <div class="gotcha-title">Errors arriving mid-stream</div>
+        <p class="gotcha-body">80% of a response rendered, then a rate limit or timeout hits. Most apps wipe the partial content and show an error state. That's wrong — the user already read half of it. Preserve what arrived, append an interruption indicator.</p>
+      </div>
+      <div class="gotcha-card">
+        <div class="gotcha-num">GOTCHA 04</div>
+        <div class="gotcha-title">Scroll anchoring vs user intent</div>
+        <p class="gotcha-body">Auto-scrolling to the bottom while the user tries to scroll up. You need to detect manual scroll intent and stop fighting them. Track whether <code>scrollHeight - scrollTop === clientHeight</code> and only auto-scroll when they're already at the bottom.</p>
+      </div>
+      <div class="gotcha-card">
+        <div class="gotcha-num">GOTCHA 05</div>
+        <div class="gotcha-title">Race conditions on re-submission</div>
+        <p class="gotcha-body">User sends a message, edits mid-stream, sends again. Two streams updating the same state — whichever resolves last wins. Same pattern as the classic async race condition: use a request sequence number and discard tokens from stale requests.</p>
+      </div>
+      <div class="gotcha-card">
+        <div class="gotcha-num">GOTCHA 06</div>
+        <div class="gotcha-title">Accessibility is broken by default</div>
+        <p class="gotcha-body"><code>aria-live="polite"</code> on a region updating 30× per second either overwhelms or ignores screen readers entirely. Announce a status separately and only surface the completed content. This is the "add keyboard support later" of streaming UI — it almost never makes v1.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: ENTERPRISE -->
+  <div id="enterprise">
+    <div class="section-label">
+      <span class="section-num">04</span>
+      <div class="section-line"></div>
+    </div>
+    <h2>What major products are actually doing</h2>
+    <p>Open DevTools on any of these, go to Network → EventStream, and watch the raw SSE deltas arrive. Then look at the UI and reverse-engineer every design decision made between those two layers. It's one of the most educational exercises available right now.</p>
+
+    <div class="enterprise-grid">
+      <div class="enterprise-card">
+        <div class="enterprise-name">Claude <span class="enterprise-badge badge-purple">Anthropic</span></div>
+        <p class="enterprise-desc">Buffers to semantic boundaries — complete sentences, closed code blocks — before rendering. Trades raw speed perception for visual coherence. The most considered streaming UX of the major products.</p>
+      </div>
+      <div class="enterprise-card">
+        <div class="enterprise-name">ChatGPT <span class="enterprise-badge badge-green">OpenAI</span></div>
+        <p class="enterprise-desc">Streams aggressively — tokens appear almost immediately. Tradeoff: visible markdown flicker in earlier versions, improved now. Stop-generation preserves partial content well.</p>
+      </div>
+      <div class="enterprise-card">
+        <div class="enterprise-name">Vercel v0 <span class="enterprise-badge badge-teal">Vercel</span></div>
+        <p class="enterprise-desc">Streams code, not prose. Shows a loading skeleton while code streams in the background, reveals only on a valid parseable boundary. Hides the stream entirely for correctness.</p>
+      </div>
+      <div class="enterprise-card">
+        <div class="enterprise-name">GitHub Copilot <span class="enterprise-badge badge-amber">GitHub</span></div>
+        <p class="enterprise-desc">Ghost text pattern — streamed content appears greyed-out, visually separated from committed content. The cleanest UX separation of "in-flight" vs "accepted" content in any streaming product today.</p>
+      </div>
+      <div class="enterprise-card">
+        <div class="enterprise-name">Perplexity <span class="enterprise-badge badge-purple">Perplexity</span></div>
+        <p class="enterprise-desc">Two parallel streams: answer + citations, kept correlated so citation markers appear near the claims they support. Genuinely hard engineering — different arrival rates, must stay semantically linked.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5: TRADEOFFS -->
+  <div id="tradeoffs">
+    <div class="section-label">
+      <span class="section-num">05</span>
+      <div class="section-line"></div>
+    </div>
+    <h2>The real tradeoffs</h2>
+    <p>There are no universally correct answers here. Every decision is a deliberate tradeoff based on what your users are trying to do.</p>
+
+    <div class="tradeoffs">
+      <div class="tradeoff-row header">
+        <div class="tradeoff-cell">Decision</div>
+        <div class="tradeoff-cell">Advantage</div>
+        <div class="tradeoff-cell">Cost</div>
+      </div>
+      <div class="tradeoff-row">
+        <div class="tradeoff-cell decision">Stream every token raw</div>
+        <div class="tradeoff-cell pro">Feels fast, immediate feedback</div>
+        <div class="tradeoff-cell con">Markdown flicker, visual noise mid-stream</div>
+      </div>
+      <div class="tradeoff-row">
+        <div class="tradeoff-cell decision">Buffer to semantic units</div>
+        <div class="tradeoff-cell pro">Coherent, polished rendering</div>
+        <div class="tradeoff-cell con">Slight perceived latency, more complex logic</div>
+      </div>
+      <div class="tradeoff-row">
+        <div class="tradeoff-cell decision">Use Vercel AI SDK</div>
+        <div class="tradeoff-cell pro">Ship fast, handles abort + state</div>
+        <div class="tradeoff-cell con">Abstraction hides failure modes</div>
+      </div>
+      <div class="tradeoff-row">
+        <div class="tradeoff-cell decision">Roll your own stream handler</div>
+        <div class="tradeoff-cell pro">Full control, observable internals</div>
+        <div class="tradeoff-cell con">You own every edge case</div>
+      </div>
+      <div class="tradeoff-row">
+        <div class="tradeoff-cell decision">Preserve partial content on error</div>
+        <div class="tradeoff-cell pro">Better UX, user keeps context</div>
+        <div class="tradeoff-cell con">Harder to test, more UI states</div>
+      </div>
+      <div class="tradeoff-row">
+        <div class="tradeoff-cell decision">Wipe on error</div>
+        <div class="tradeoff-cell pro">Simple, clean state</div>
+        <div class="tradeoff-cell con">Disorienting — user saw content that vanished</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLOSING -->
+  <div class="closing">
+    <div class="closing-title">The engineers who get this right</div>
+    <p>…aren't the ones who know the most about LLMs. They're the ones who already got async UI right — and had the discipline to ask "what assumptions am I carrying over that no longer apply?"</p>
+    <p>The answer, it turns out, is most of them. Model your states explicitly, upfront, before you write a single line of streaming code. Everything else follows.</p>
+    <div class="cta-row">
+      <a href="https://linkedin.com" target="_blank" class="btn primary">Share on LinkedIn</a>
+      <a href="https://github.com" target="_blank" class="btn">View on GitHub</a>
+    </div>
+  </div>
+
+</article>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">Written by <strong>Charishma</strong> · Senior Front-End Engineer</div>
+  <div class="footer-links">
+    <a href="https://linkedin.com" target="_blank">LinkedIn</a>
+    <a href="https://github.com" target="_blank">GitHub</a>
+  </div>
+</footer>
+
+<script>
+  window.addEventListener('scroll', () => {
+    const doc = document.documentElement;
+    const scrolled = doc.scrollTop / (doc.scrollHeight - doc.clientHeight);
+    document.getElementById('progress').style.width = (scrolled * 100) + '%';
+  });
+</script>
+
+</body>
+</html>
