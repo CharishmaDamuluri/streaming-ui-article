@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Streaming UI is the new async UI</title>
+<title>Streaming UI is the new async UI — Charishma</title>
 <meta name="description" content="After 7 years of front-end engineering, here's the honest breakdown of streaming UI, why it matters, and the mistakes we keep making." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -625,7 +625,7 @@
     </div>
     <h2>What async UI taught us</h2>
     <p>When Promises and <code>async/await</code> went mainstream, the entire mental model of building UI had to shift. We moved from synchronous "request → wait → render" to managing a new class of problems: loading states, error boundaries, race conditions, stale data, partial failures.</p>
-    <p>That transition took the industry years to get right. We built skeleton loaders, React Suspense, React Query, optimistic updates — all around one core assumption:</p>
+    <p>That transition took the industry years to get right. We built skeleton loaders, React Suspense, React Query, optimistic updates. All of it built around one core assumption:</p>
 
     <div class="callout">
       <p>The response arrives whole, or not at all.</p>
@@ -666,26 +666,26 @@
       <div class="section-line"></div>
     </div>
     <h2>How streaming UI actually works</h2>
-    <p>At the protocol level, streaming runs via <strong>Server-Sent Events (SSE)</strong> — the server holds the HTTP connection open and pushes token deltas as they're generated. Each event looks like:</p>
+    <p>At the protocol level, streaming runs via <strong>Server-Sent Events (SSE)</strong>. The server holds the HTTP connection open and pushes token deltas as they're generated, rather than waiting for the full response to be ready. Each event that arrives over that connection looks like this:</p>
 
     <div class="code-block">
       <div class="code-header">
         <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
-        <span class="code-lang">SSE stream</span>
+        <span class="code-lang">SSE stream (raw wire format)</span>
       </div>
-      <pre><span class="cm">// server pushes these continuously</span>
+      <pre><span class="cm">// server keeps the connection open and pushes these one by one</span>
 <span class="var">data:</span> <span class="str">{"delta": {"text": "The"}}</span>
 <span class="var">data:</span> <span class="str">{"delta": {"text": " abstraction"}}</span>
 <span class="var">data:</span> <span class="str">{"delta": {"text": " layer"}}</span>
-<span class="var">data:</span> <span class="str">[DONE]</span></pre>
+<span class="var">data:</span> <span class="str">[DONE]</span>   <span class="cm">// signals stream is finished</span></pre>
     </div>
 
-    <p>On the client you consume this via the <code>ReadableStream</code> API on the <code>fetch</code> response body:</p>
+    <p>On the client you consume this via the <code>ReadableStream</code> API hanging off the <code>fetch</code> response body. You grab a reader, decode each binary chunk into text, parse out the token, and update your UI. Here's what most engineers write first:</p>
 
     <div class="code-block">
       <div class="code-header">
         <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
-        <span class="code-lang">React — naive approach</span>
+        <span class="code-lang">React: naive approach (has real problems)</span>
       </div>
       <pre><span class="kw">const</span> <span class="var">response</span> = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'/api/chat'</span>, { <span class="var">method</span>: <span class="str">'POST'</span> });
 <span class="kw">const</span> <span class="var">reader</span> = <span class="var">response</span>.<span class="var">body</span>.<span class="fn">getReader</span>();
@@ -696,29 +696,59 @@
   <span class="kw">if</span> (<span class="var">done</span>) <span class="kw">break</span>;
 
   <span class="kw">const</span> <span class="var">token</span> = <span class="fn">parseChunk</span>(<span class="var">decoder</span>.<span class="fn">decode</span>(<span class="var">value</span>));
-  <span class="cm">// setState 20-30x per second — this causes problems</span>
+
+  <span class="cm">// looks harmless, but this fires 20-30x per second</span>
   <span class="fn">setStreamedText</span>(<span class="var">prev</span> => <span class="var">prev</span> + <span class="var">token</span>);
 }</pre>
     </div>
 
-    <p>The better pattern — accumulate in a <code>ref</code>, render via <code>requestAnimationFrame</code>:</p>
+    <h3>Why the naive approach breaks in practice</h3>
+
+    <p>This looks correct and will work in a basic demo. But it has three distinct problems that only surface under real conditions:</p>
+
+    <p><strong>Problem 1: You're fighting React's scheduler.</strong> LLM APIs typically stream at 20–30 tokens per second. Each token triggers a <code>setState</code> call. React 18's automatic batching is designed to group state updates that happen in the same tick, but the async nature of the stream loop means tokens often land in separate microtask ticks, bypassing batching entirely. The result: React re-renders the component on nearly every token. At 30 tokens/sec that's 30 renders per second, each diffing the virtual DOM, each committing to the real DOM. On complex components (anything with markdown rendering, syntax highlighting, or child components) this creates visible jank. The text doesn't flow, it stutters.</p>
+
+    <p><strong>Problem 2: You have no way to cancel cleanly.</strong> The while loop owns the stream. If the user clicks "stop generating" or navigates away mid-stream, there's no hook to abort. The loop keeps running, keeps calling <code>setState</code>, potentially on an unmounted component. In React 18 this is a silent failure. No warning, just a memory leak and potential state corruption if the component remounts. You'd need to thread an <code>AbortController</code> through the entire call, and the naive pattern makes that awkward to add after the fact.</p>
+
+    <p><strong>Problem 3: You can't control the render cadence.</strong> With <code>setState</code> on every token, rendering is tied directly to token arrival rate. If the API speeds up (some models stream faster on short responses), your render rate spikes. If it slows down, it drops. You have no way to smooth this out or cap it at a sensible frame rate. The typewriter effect becomes inconsistent, sometimes fast, sometimes slow, occasionally jumpy, purely as a side effect of network and model characteristics outside your control.</p>
+
+    <div class="callout">
+      <p>The core mistake is treating each token as an independent UI event. Tokens aren't events. They're a stream. The rendering layer should consume that stream at its own rate, decoupled from the arrival rate.</p>
+    </div>
+
+    <p>The fix is to separate the concerns: let the stream accumulate into a <code>ref</code> (which is synchronous and outside React's render cycle), then sync that ref to state at a rate you control via <code>requestAnimationFrame</code>. This caps your render rate at the browser's frame rate (~60fps), batches multiple tokens into single renders naturally, and gives you a clean place to wire up abort logic:</p>
 
     <div class="code-block">
       <div class="code-header">
         <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
-        <span class="code-lang">React — production approach</span>
+        <span class="code-lang">React: production approach</span>
       </div>
       <pre><span class="kw">const</span> <span class="var">bufferRef</span> = <span class="fn">useRef</span>(<span class="str">''</span>);
 <span class="kw">const</span> [<span class="var">displayText</span>, <span class="fn">setDisplayText</span>] = <span class="fn">useState</span>(<span class="str">''</span>);
+<span class="kw">const</span> <span class="var">rafRef</span> = <span class="fn">useRef</span>(<span class="kw">null</span>);
 
-<span class="cm">// accumulate synchronously — no React batching issues</span>
-<span class="var">bufferRef</span>.<span class="var">current</span> += <span class="var">token</span>;
+<span class="kw">const</span> <span class="fn">scheduleRender</span> = () => {
+  <span class="cm">// cancel any pending frame before scheduling a new one</span>
+  <span class="kw">if</span> (<span class="var">rafRef</span>.<span class="var">current</span>) <span class="fn">cancelAnimationFrame</span>(<span class="var">rafRef</span>.<span class="var">current</span>);
 
-<span class="cm">// sync to state at a controlled frame rate</span>
-<span class="fn">requestAnimationFrame</span>(() => {
-  <span class="fn">setDisplayText</span>(<span class="var">bufferRef</span>.<span class="var">current</span>);
-});</pre>
+  <span class="var">rafRef</span>.<span class="var">current</span> = <span class="fn">requestAnimationFrame</span>(() => {
+    <span class="cm">// single setState per frame — no matter how many tokens arrived</span>
+    <span class="fn">setDisplayText</span>(<span class="var">bufferRef</span>.<span class="var">current</span>);
+  });
+};
+
+<span class="cm">// in your stream loop — just accumulate and schedule</span>
+<span class="var">bufferRef</span>.<span class="var">current</span> += <span class="var">token</span>;   <span class="cm">// synchronous, no React involved</span>
+<span class="fn">scheduleRender</span>();               <span class="cm">// at most one render per ~16ms</span>
+
+<span class="cm">// cleanup on unmount — cancel pending frame</span>
+<span class="kw">return</span> () => {
+  <span class="kw">if</span> (<span class="var">rafRef</span>.<span class="var">current</span>) <span class="fn">cancelAnimationFrame</span>(<span class="var">rafRef</span>.<span class="var">current</span>);
+  <span class="var">controller</span>.<span class="fn">abort</span>();
+};</pre>
     </div>
+
+    <p>Now multiple tokens that arrive within the same 16ms frame get batched into a single render automatically. The display feels smooth because it's locked to the browser's frame rate, not the model's token rate. And you have clean hooks for abort and unmount cleanup.</p>
   </div>
 
   <!-- SECTION 3: GOTCHAS -->
@@ -744,7 +774,7 @@
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 03</div>
         <div class="gotcha-title">Errors arriving mid-stream</div>
-        <p class="gotcha-body">80% of a response rendered, then a rate limit or timeout hits. Most apps wipe the partial content and show an error state. That's wrong — the user already read half of it. Preserve what arrived, append an interruption indicator.</p>
+        <p class="gotcha-body">80% of a response rendered, then a rate limit or timeout hits. Most apps wipe the partial content and show an error state. That's the wrong call. The user already read half of it. Preserve what arrived, append an interruption indicator.</p>
       </div>
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 04</div>
@@ -759,7 +789,7 @@
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 06</div>
         <div class="gotcha-title">Accessibility is broken by default</div>
-        <p class="gotcha-body"><code>aria-live="polite"</code> on a region updating 30× per second either overwhelms or ignores screen readers entirely. Announce a status separately and only surface the completed content. This is the "add keyboard support later" of streaming UI — it almost never makes v1.</p>
+        <p class="gotcha-body"><code>aria-live="polite"</code> on a region updating 30× per second either overwhelms or ignores screen readers entirely. Announce a status separately and only surface the completed content. This is the "add keyboard support later" of streaming UI. It almost never makes v1.</p>
       </div>
     </div>
   </div>
@@ -776,11 +806,11 @@
     <div class="enterprise-grid">
       <div class="enterprise-card">
         <div class="enterprise-name">Claude <span class="enterprise-badge badge-purple">Anthropic</span></div>
-        <p class="enterprise-desc">Buffers to semantic boundaries — complete sentences, closed code blocks — before rendering. Trades raw speed perception for visual coherence. The most considered streaming UX of the major products.</p>
+        <p class="enterprise-desc">Buffers to semantic boundaries (complete sentences, closed code blocks) before rendering. Trades raw speed perception for visual coherence. The most considered streaming UX of the major products.</p>
       </div>
       <div class="enterprise-card">
         <div class="enterprise-name">ChatGPT <span class="enterprise-badge badge-green">OpenAI</span></div>
-        <p class="enterprise-desc">Streams aggressively — tokens appear almost immediately. Tradeoff: visible markdown flicker in earlier versions, improved now. Stop-generation preserves partial content well.</p>
+        <p class="enterprise-desc">Streams aggressively so tokens appear almost immediately. The tradeoff is visible markdown flicker in earlier versions, though it has improved significantly. Stop-generation preserves partial content well.</p>
       </div>
       <div class="enterprise-card">
         <div class="enterprise-name">Vercel v0 <span class="enterprise-badge badge-teal">Vercel</span></div>
@@ -788,11 +818,11 @@
       </div>
       <div class="enterprise-card">
         <div class="enterprise-name">GitHub Copilot <span class="enterprise-badge badge-amber">GitHub</span></div>
-        <p class="enterprise-desc">Ghost text pattern — streamed content appears greyed-out, visually separated from committed content. The cleanest UX separation of "in-flight" vs "accepted" content in any streaming product today.</p>
+        <p class="enterprise-desc">Ghost text pattern where streamed content appears greyed-out, visually separated from committed content. The cleanest UX separation of "in-flight" vs "accepted" content in any streaming product today.</p>
       </div>
       <div class="enterprise-card">
         <div class="enterprise-name">Perplexity <span class="enterprise-badge badge-purple">Perplexity</span></div>
-        <p class="enterprise-desc">Two parallel streams: answer + citations, kept correlated so citation markers appear near the claims they support. Genuinely hard engineering — different arrival rates, must stay semantically linked.</p>
+        <p class="enterprise-desc">Two parallel streams: answer and citations, kept correlated so citation markers appear near the claims they support. Genuinely hard engineering given the different arrival rates that still need to stay semantically linked.</p>
       </div>
     </div>
   </div>
@@ -840,7 +870,7 @@
       <div class="tradeoff-row">
         <div class="tradeoff-cell decision">Wipe on error</div>
         <div class="tradeoff-cell pro">Simple, clean state</div>
-        <div class="tradeoff-cell con">Disorienting — user saw content that vanished</div>
+        <div class="tradeoff-cell con">Disorienting. The user saw content that just vanished.</div>
       </div>
     </div>
   </div>
@@ -848,7 +878,7 @@
   <!-- CLOSING -->
   <div class="closing">
     <div class="closing-title">The engineers who get this right</div>
-    <p>…aren't the ones who know the most about LLMs. They're the ones who already got async UI right — and had the discipline to ask "what assumptions am I carrying over that no longer apply?"</p>
+    <p>...aren't the ones who know the most about LLMs. They're the ones who already got async UI right, and had the discipline to ask "what assumptions am I carrying over that no longer apply?"</p>
     <p>The answer, it turns out, is most of them. Model your states explicitly, upfront, before you write a single line of streaming code. Everything else follows.</p>
     <div class="cta-row">
       <a href="https://linkedin.com" target="_blank" class="btn primary">Share on LinkedIn</a>
