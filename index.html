@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Streaming UI is the new async UI — Charishma</title>
+<title>Streaming UI is the new async UI</title>
 <meta name="description" content="After 7 years of front-end engineering, here's the honest breakdown of streaming UI, why it matters, and the mistakes we keep making." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -596,10 +596,9 @@
     <span class="tag accent">Front-End Engineering</span>
     <span class="tag">AI Engineering</span>
     <div class="dot"></div>
-    <span class="hero-date">2025</span>
   </div>
 
-  <h1>Streaming UI is the <em>new async UI</em> — and we're repeating the same design mistakes</h1>
+  <h1>Streaming UI is the <em>new async UI</em> - and we're repeating the same design mistakes</h1>
 
   <p class="hero-sub">After 7 years in front-end engineering, I've watched this inflection point arrive before. Here's the honest breakdown of what's changing, what we keep getting wrong, and what the best teams are doing differently.</p>
 
@@ -607,7 +606,7 @@
     <div class="avatar">CE</div>
     <div>
       <div class="author-name">Charishma</div>
-      <div class="author-role">Senior Front-End Engineer · Learning AI Engineering</div>
+      <div class="author-role">Front-End Engineer - Learning AI Engineering</div>
     </div>
   </div>
 </div>
@@ -732,16 +731,16 @@
   <span class="kw">if</span> (<span class="var">rafRef</span>.<span class="var">current</span>) <span class="fn">cancelAnimationFrame</span>(<span class="var">rafRef</span>.<span class="var">current</span>);
 
   <span class="var">rafRef</span>.<span class="var">current</span> = <span class="fn">requestAnimationFrame</span>(() => {
-    <span class="cm">// single setState per frame — no matter how many tokens arrived</span>
+    <span class="cm">// single setState per frame - no matter how many tokens arrived</span>
     <span class="fn">setDisplayText</span>(<span class="var">bufferRef</span>.<span class="var">current</span>);
   });
 };
 
-<span class="cm">// in your stream loop — just accumulate and schedule</span>
+<span class="cm">// in your stream loop - just accumulate and schedule</span>
 <span class="var">bufferRef</span>.<span class="var">current</span> += <span class="var">token</span>;   <span class="cm">// synchronous, no React involved</span>
 <span class="fn">scheduleRender</span>();               <span class="cm">// at most one render per ~16ms</span>
 
-<span class="cm">// cleanup on unmount — cancel pending frame</span>
+<span class="cm">// cleanup on unmount - cancel pending frame</span>
 <span class="kw">return</span> () => {
   <span class="kw">if</span> (<span class="var">rafRef</span>.<span class="var">current</span>) <span class="fn">cancelAnimationFrame</span>(<span class="var">rafRef</span>.<span class="var">current</span>);
   <span class="var">controller</span>.<span class="fn">abort</span>();
@@ -764,12 +763,12 @@
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 01</div>
         <div class="gotcha-title">Markdown flickering</div>
-        <p class="gotcha-body">Tokens render mid-syntax. Users watch <code>**The best</code> snap to bold when the closing <code>**</code> arrives. Code blocks appear as raw text then suddenly reformat. The fix: buffer to semantic boundaries before rendering. Claude's UI does this — that's why it feels coherent mid-stream.</p>
+        <p class="gotcha-body">Tokens render mid-syntax. Users watch <code>**The best</code> snap to bold when the closing <code>**</code> arrives. Code blocks appear as raw text then suddenly reformat. The fix: buffer to semantic boundaries before rendering. Claude's UI does this - that's why it feels coherent mid-stream.</p>
       </div>
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 02</div>
         <div class="gotcha-title">Component unmounting mid-stream</div>
-        <p class="gotcha-body">User navigates away while a stream is in flight. You're calling setState on an unmounted component — silent memory leak in React 18. Always wire an <code>AbortController</code> to the effect cleanup function. Almost every first implementation forgets this.</p>
+        <p class="gotcha-body">User navigates away while a stream is in flight. You're calling setState on an unmounted component - silent memory leak in React 18. Always wire an <code>AbortController</code> to the effect cleanup function. Almost every first implementation forgets this.</p>
       </div>
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 03</div>
@@ -784,7 +783,7 @@
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 05</div>
         <div class="gotcha-title">Race conditions on re-submission</div>
-        <p class="gotcha-body">User sends a message, edits mid-stream, sends again. Two streams updating the same state — whichever resolves last wins. Same pattern as the classic async race condition: use a request sequence number and discard tokens from stale requests.</p>
+        <p class="gotcha-body">User sends a message, edits mid-stream, sends again. Two streams updating the same state - whichever resolves last wins. Same pattern as the classic async race condition: use a request sequence number and discard tokens from stale requests.</p>
       </div>
       <div class="gotcha-card">
         <div class="gotcha-num">GOTCHA 06</div>
